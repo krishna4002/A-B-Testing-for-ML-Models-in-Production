@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Model Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      background: linear-gradient(to right, #f8f9fa, #e8f0fe);
+    }
+    h1 {
+      font-weight: 700;
+      color: #2c3e50;
+    }
+    .card {
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      border: none;
+    }
+    .card h5 {
+      color: #555;
+    }
+    .nav-tabs .nav-link.active {
+      background-color: #007bff;
+      color: #fff;
+    }
+    .table th {
+      background-color: #007bff;
+      color: white;
+    }
+    .table td {
+      vertical-align: middle;
+    }
+    .tab-content {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .download-btn {
+      float: right;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+<div class="container py-5">
+  <h1 class="text-center mb-4">ML Model Comparison Dashboard</h1>
+
+  <ul class="nav nav-tabs mb-4" id="dashboardTabs" role="tablist">
+    <li class="nav-item"><button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview">Overview</button></li>
+    <li class="nav-item"><button class="nav-link" id="charts-tab" data-bs-toggle="tab" data-bs-target="#charts">Charts</button></li>
+    <li class="nav-item"><button class="nav-link" id="feedback-tab" data-bs-toggle="tab" data-bs-target="#feedback">User Feedback</button></li>
+    <li class="nav-item"><button class="nav-link" id="table-tab" data-bs-toggle="tab" data-bs-target="#table">Prediction Table</button></li>
+  </ul>
+
+  <div class="tab-content">
+    <!-- Overview Tab -->
+    <div class="tab-pane fade show active" id="overview">
+      <div class="row text-center">
+        <div class="col-md-4 mb-4">
+          <div class="card" style="background-color: #bbdefb;">
+            <div class="card-body">
+              <h5 class="text-primary">Total Predictions</h5>
+              <h3 id="totalCount" class="text-dark">0</h3>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4 mb-4">
+          <div class="card" style="background-color: #c8e6c9;">
+            <div class="card-body">
+              <h5 class="text-success">Champion Accuracy</h5>
+              <h3 id="championAcc" class="text-dark">0%</h3>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4 mb-4">
+          <div class="card" style="background-color: #ffe082;">
+            <div class="card-body">
+              <h5 style="color: #8a6d3b;">Challenger Accuracy</h5>
+              <h3 id="challengerAcc" class="text-dark">0%</h3>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts Tab -->
+    <div class="tab-pane fade" id="charts">
+      <div class="row">
+        <div class="col-md-6 mb-4"><canvas id="modelUsageChart"></canvas></div>
+        <div class="col-md-6 mb-4"><canvas id="classDistChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- User Feedback Tab -->
+    <div class="tab-pane fade" id="feedback">
+      <div class="row">
+        <div class="col-md-6 mb-4">
+          <h5 class="text-center">Correct Predictions</h5>
+          <canvas id="correctFeedbackChart"></canvas>
+        </div>
+        <div class="col-md-6 mb-4">
+          <h5 class="text-center">Incorrect Predictions</h5>
+          <canvas id="incorrectFeedbackChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Table Tab -->
+    <div class="tab-pane fade" id="table">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h5 class="mb-0">Prediction Logs</h5>
+        <button class="btn btn-success" onclick="downloadCSV()">Download CSV</button>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-striped" id="predictionTable">
+          <thead class="table-primary">
+            <tr>
+              <th>Timestamp</th>
+              <th>User ID</th>
+              <th>Random Value</th>
+              <th>Model</th>
+              <th>Prediction</th>
+              <th>True Label</th>
+              <th>Correct</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+async function loadDashboard() {
+  const statsRes = await fetch('/stats');
+  const stats = await statsRes.json();
+
+  document.getElementById("totalCount").textContent = stats.total_predictions;
+  document.getElementById("championAcc").textContent = stats.accuracy_percent.champion + "%";
+  document.getElementById("challengerAcc").textContent = stats.accuracy_percent.challenger + "%";
+
+  new Chart(document.getElementById("modelUsageChart"), {
+    type: "pie",
+    data: {
+      labels: Object.keys(stats.model_usage),
+      datasets: [{
+        data: Object.values(stats.model_usage),
+        backgroundColor: ["#4CAF50", "#FF9800"]
+      }]
+    }
+  });
+
+  const classLabels = Object.keys(stats.class_distribution_by_model);
+  const championData = classLabels.map(c => stats.class_distribution_by_model[c].champion);
+  const challengerData = classLabels.map(c => stats.class_distribution_by_model[c].challenger);
+
+  new Chart(document.getElementById("classDistChart"), {
+    type: "bar",
+    data: {
+      labels: classLabels,
+      datasets: [
+        {
+          label: "Champion",
+          data: championData,
+          backgroundColor: "#4CAF50"
+        },
+        {
+          label: "Challenger",
+          data: challengerData,
+          backgroundColor: "#FF9800"
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        title: {
+          display: true,
+          text: "Class Predictions by Model"
+        }
+      }
+    }
+  });
+
+  // Feedback Pie Charts
+  const feedback = stats.model_correctness || {
+    champion: { correct: 0, incorrect: 0 },
+    challenger: { correct: 0, incorrect: 0 }
+  };
+
+  new Chart(document.getElementById("correctFeedbackChart"), {
+    type: "pie",
+    data: {
+      labels: ["Champion Correct", "Challenger Correct"],
+      datasets: [{
+        data: [feedback.champion.correct, feedback.challenger.correct],
+        backgroundColor: ["#4CAF50", "#FF9800"]
+      }]
+    },
+    options: {
+      plugins: {
+        title: {
+          display: true,
+          text: "Correct Predictions Distribution"
+        }
+      }
+    }
+  });
+
+  new Chart(document.getElementById("incorrectFeedbackChart"), {
+    type: "pie",
+    data: {
+      labels: ["Champion Incorrect", "Challenger Incorrect"],
+      datasets: [{
+        data: [feedback.champion.incorrect, feedback.challenger.incorrect],
+        backgroundColor: ["#e57373", "#fbc02d"]
+      }]
+    },
+    options: {
+      plugins: {
+        title: {
+          display: true,
+          text: "Incorrect Predictions Distribution"
+        }
+      }
+    }
+  });
+
+  const predRes = await fetch('/predictions');
+  const predictions = await predRes.json();
+  const tableBody = document.querySelector("#predictionTable tbody");
+  tableBody.innerHTML = "";
+  predictions.forEach(entry => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${entry.timestamp}</td>
+      <td>${entry.user_id}</td>
+      <td>${parseFloat(entry.random_value).toFixed(4)}</td>
+      <td>${entry.model_used}</td>
+      <td>${entry.prediction}</td>
+      <td>${entry.true_label}</td>
+      <td>
+        ${entry.correct === "1" 
+          ? '<span class="text-success">✔️</span>' 
+          : entry.correct === "0" 
+            ? '<span class="text-danger">❌</span>' 
+            : "-"}
+      </td>`;
+    tableBody.appendChild(row);
+  });
+}
+
+function downloadCSV() {
+  const rows = [
+    ["Timestamp", "User ID", "Random Value", "Model", "Prediction", "True Label", "Correct"]
+  ];
+  const tableRows = document.querySelectorAll("#predictionTable tbody tr");
+
+  tableRows.forEach(row => {
+    const cells = row.querySelectorAll("td");
+    const rowData = [];
+
+    cells.forEach((cell, index) => {
+      let text = cell.textContent.trim();
+      if (index === 6) {
+        if (text.includes("✔")) text = "Correct";
+        else if (text.includes("❌")) text = "Wrong";
+        else text = "-";
+      }
+      text = `"${text.replace(/"/g, '""')}"`;
+      rowData.push(text);
+    });
+
+    rows.push(rowData);
+  });
+
+  const csvContent = rows.map(e => e.join(",")).join("\n");
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", "predictions.csv");
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+loadDashboard();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
