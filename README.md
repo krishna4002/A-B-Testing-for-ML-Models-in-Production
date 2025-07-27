@@ -39,7 +39,7 @@ ab_testing_ml_production/
 └── README.md
 ```
 
-## ⚙ Technologies Used
+## Technologies Used
 
 - **Python**, **FastAPI**, **MLflow**, **Scikit-learn**, **SQLite3**
 - **Pandas**, **NumPy**, **Pydantic**
